@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barbaarin seikkailut</title>
+<style>
+  :root{
+    --bg:#1b1f24;
+    --panel:#262b33;
+    --accent:#7fb685;
+    --accent2:#d9a96b;
+    --text:#e8e6e1;
+    --muted:#9aa3ab;
+    --danger:#d97070;
+    --grid-cell:#33394333;
+    --focus:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", system-ui, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.4;
+  }
+  .wrap{
+    max-width:760px;
+    margin:0 auto;
+    padding:1rem;
+  }
+  h1{
+    font-size:1.4rem;
+    margin:0 0 1rem 0;
+    color:var(--accent2);
+    letter-spacing:0.03em;
+  }
+  h2{
+    font-size:1.05rem;
+    margin:1rem 0 0.4rem 0;
+    color:var(--accent);
+    border-bottom:1px solid #3a4049;
+    padding-bottom:0.2rem;
+  }
+  button{
+    font-family:inherit;
+    font-size:1rem;
+    background:var(--panel);
+    color:var(--text);
+    border:1px solid #444b55;
+    border-radius:6px;
+    padding:0.5rem 0.8rem;
+    cursor:pointer;
+  }
+  button:hover{ background:#323942; }
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+    outline:3px solid var(--focus);
+    outline-offset:2px;
+  }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  /* --- Aloitusnäyttö --- */
+  #start-screen{
+    background:var(--panel);
+    padding:1.2rem;
+    border-radius:10px;
+  }
+  #start-screen label{ display:block; margin-bottom:0.3rem; }
+  #start-screen input[type="text"]{
+    font-size:1rem;
+    padding:0.4rem;
+    width:100%;
+    max-width:300px;
+    border-radius:6px;
+    border:1px solid #444b55;
+    background:#1b1f24;
+    color:var(--text);
+    margin-bottom:0.6rem;
+  }
+  .name-row{ display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.8rem;}
+  .name-row input{ margin-bottom:0; flex:1; min-width:160px; }
+  .start-actions{ display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:1rem; }
+
+  /* --- Pelialue --- */
+  #game-screen{ display:none; }
+  #game-screen.active{ display:block; }
+
+  #map-grid{
+    display:grid;
+    grid-template-columns:repeat(7, 1fr);
+    grid-template-rows:repeat(7, 1fr);
+    gap:2px;
+    background:#11141a;
+    border:2px solid #3a4049;
+    border-radius:6px;
+    padding:4px;
+    aspect-ratio:1/1;
+    max-width:420px;
+    margin:0 auto;
+  }
+  .cell{
+    background:#222831;
+    border-radius:3px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.4rem;
+    aspect-ratio:1/1;
+    position:relative;
+  }
+  .cell.player{ outline:2px solid var(--focus); }
+  .cell .sr-only{
+    position:absolute;
+    width:1px; height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+  }
+
+  /* --- Tapahtumaloki --- */
+  #log-region{
+    background:var(--panel);
+    border-radius:8px;
+    padding:0.6rem 0.8rem;
+    margin-top:0.8rem;
+    min-height:5.5em;
+  }
+  #log-region p{ margin:0.15rem 0; }
+  #log-region .latest{ font-weight:600; color:var(--accent2); }
+  #log-region .older{ color:var(--muted); font-size:0.92rem; }
+
+  /* --- Tilarivit --- */
+  #status-line{
+    display:flex;
+    gap:1.2rem;
+    flex-wrap:wrap;
+    margin-top:0.6rem;
+    font-weight:600;
+  }
+  #status-line span{ background:var(--panel); padding:0.25rem 0.6rem; border-radius:6px; }
+  #ap-value{ color:var(--accent); }
+  #hp-value{ color:var(--danger); }
+
+  /* --- Toiminnot --- */
+  #actions fieldset{
+    border:1px solid #3a4049;
+    border-radius:8px;
+    padding:0.6rem;
+    margin:0.5rem 0;
+  }
+  #actions legend{ color:var(--accent2); padding:0 0.3rem; font-weight:600; }
+  .action-btns{ display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem; }
+
+  .move-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 3rem);
+    grid-template-rows:repeat(3, 3rem);
+    gap:0.3rem;
+    justify-content:center;
+  }
+  .move-grid button{ padding:0; font-size:1.3rem; }
+  .move-grid .center{ background:#1b1f24; cursor:default; }
+  .move-grid .center:hover{ background:#1b1f24; }
+
+  /* --- Tavarat --- */
+  #inventory-list{
+    list-style:none;
+    padding:0;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    gap:0.4rem;
+  }
+  #inventory-list li{
+    background:var(--panel);
+    border-radius:6px;
+    padding:0.5rem;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:0.5rem;
+    justify-content:space-between;
+  }
+  #inventory-list li .item-actions{ display:flex; gap:0.4rem; flex-wrap:wrap; }
+  .equipped{ color:var(--accent); font-weight:600; }
+
+  /* --- Loppupainikkeet --- */
+  #footer-actions{
+    display:flex;
+    gap:0.6rem;
+    margin-top:1.2rem;
+    flex-wrap:wrap;
+  }
+
+  /* --- Modaali (valinnat) --- */
+  #modal-overlay{
+    display:none;
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.6);
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+  }
+  #modal-overlay.active{ display:flex; }
+  #modal-box{
+    background:var(--panel);
+    border-radius:10px;
+    padding:1.2rem;
+    max-width:380px;
+    width:90%;
+  }
+  #modal-box h2{ margin-top:0; }
+  #modal-box .modal-btns{ display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.8rem; }
+
+  .visually-hidden{
+    position:absolute;
+    width:1px; height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+  }
+
+  .small-note{ color:var(--muted); font-size:0.9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Barbaarin seikkailut</h1>
+
+  <!-- ===================== ALOITUSNÄYTTÖ ===================== -->
+  <section id="start-screen" aria-label="Aloitusnäyttö">
+    <h2 id="start-heading">Aloitusnäyttö</h2>
+
+    <div class="name-row">
+      <label for="player-name-input">Hahmon nimi</label>
+      <input type="text" id="player-name-input" maxlength="20" autocomplete="off">
+      <button type="button" id="suggest-name-btn">Keksi nimi</button>
+    </div>
+    <p id="name-status" class="small-note" role="status"></p>
+
+    <div class="start-actions">
+      <button type="button" id="start-game-btn">Aloita</button>
+      <button type="button" id="load-game-btn">Lataa peli</button>
+    </div>
+    <p id="load-status" class="small-note" role="status"></p>
+  </section>
+
+  <!-- ===================== PELINÄYTTÖ ===================== -->
+  <section id="game-screen" aria-label="Pelinäyttö">
+
+    <h2>Pelialue</h2>
+    <div id="map-grid" role="img" aria-label="Pelialueen kartta. Tarkemmat tiedot ympäristöstä löytyvät alta tapahtumalokista."></div>
+
+    <h2>Tapahtumat</h2>
+    <div id="log-region" aria-live="polite" aria-atomic="false">
+      <p class="latest" id="log-line-0"></p>
+      <p class="older" id="log-line-1"></p>
+      <p class="older" id="log-line-2"></p>
+    </div>
+
+    <div id="status-line">
+      <span id="ap-status">Toimintopisteet: <span id="ap-value">4</span>/4</span>
+      <span id="hp-status">Terveys (HP): <span id="hp-value">10</span>/10</span>
+      <span id="turn-status" hidden>Vuoro: <span id="turn-value"></span></span>
+    </div>
+
+    <h2 id="actions-heading">Toiminnot</h2>
+    <div id="actions">
+
+      <fieldset>
+        <legend></legend>
+        <div class="action-btns">
+          <button type="button" id="attack-btn">Lyö (2 AP)</button>
+          <button type="button" id="shoot-btn">Ammu (2 AP)</button>
+          <button type="button" id="end-turn-btn" hidden>Lopeta vuoro</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend id="move-legend">Liiku (2 AP). Voit käyttää myös numeronäppäimistön (numpad) numeroita 1-9.</legend>
+        <div class="move-grid" role="group" aria-label="Liikkumispainikkeet">
+          <button type="button" data-dir="luoteeseen" data-dx="-1" data-dy="-1" aria-label="Luoteeseen">↖</button>
+          <button type="button" data-dir="pohjoiseen" data-dx="0" data-dy="-1" aria-label="Pohjoiseen">↑</button>
+          <button type="button" data-dir="koilliseen" data-dx="1" data-dy="-1" aria-label="Koilliseen">↗</button>
+          <button type="button" data-dir="länteen" data-dx="-1" data-dy="0" aria-label="Länteen">←</button>
+          <button type="button" class="center" tabindex="-1" aria-hidden="true">●</button>
+          <button type="button" data-dir="itään" data-dx="1" data-dy="0" aria-label="Itään">→</button>
+          <button type="button" data-dir="lounaaseen" data-dx="-1" data-dy="1" aria-label="Lounaaseen">↙</button>
+          <button type="button" data-dir="etelään" data-dx="0" data-dy="1" aria-label="Etelään">↓</button>
+          <button type="button" data-dir="kaakkoon" data-dx="1" data-dy="1" aria-label="Kaakkoon">↘</button>
+        </div>
+      </fieldset>
+    </div>
+
+    <h2>Tavarat</h2>
+    <p class="small-note">Tilaa kuudelle esineelle. Valitse käyttöön lähi- ja kaukoase tai käytä lääke.</p>
+    <ul id="inventory-list" aria-label="Tavaraluettelo"></ul>
+
+    <h2 class="visually-hidden">Pelin hallinta</h2>
+    <div id="footer-actions">
+      <button type="button" id="save-game-btn">Tallenna</button>
+      <button type="button" id="new-game-btn">Uusi peli</button>
+    </div>
+  </section>
+
+  <!-- ===================== MODAALI ===================== -->
+  <div id="modal-overlay">
+    <div id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
+      <h2 id="modal-title"></h2>
+      <p id="modal-desc"></p>
+      <div class="modal-btns" id="modal-buttons"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   ASETUKSET JA TIETOVARASTOT
+   ========================================================= */
+const MAP_SIZE = 100;
+const VIEW_RADIUS = 3; // 7x7 -> keskeltä 3 ruutua kaikkiin suuntiin
+const ENEMY_COUNT = 10;
+const INVENTORY_MAX = 6;
+const SAVE_KEY = "barbaari_save_v1";
+
+const TILE = {
+  EMPTY: "empty",
+  TREE: "tree",
+  WALL: "wall"
+};
+
+// Suunnat: dx, dy ja niiden suomenkieliset nimet sekä numpad-numerot
+const DIRECTIONS = [
+  { name: "vasemmalla ylhäällä", dx: -1, dy: -1, numpad: "7" },
+  { name: "ylhäällä", dx: 0, dy: -1, numpad: "8" },
+  { name: "oikealla ylhäällä", dx: 1, dy: -1, numpad: "9" },
+  { name: "vasemmalla", dx: -1, dy: 0, numpad: "4" },
+  { name: "oikealla", dx: 1, dy: 0, numpad: "6" },
+  { name: "vasemmalla alhaalla", dx: -1, dy: 1, numpad: "1" },
+  { name: "alhaalla", dx: 0, dy: 1, numpad: "2" },
+  { name: "oikealla alhaalla", dx: 1, dy: 1, numpad: "3" }
+];
+
+// Liikkumissuuntien hyökkäys/lyöntipriorisointi (lähekkäisyys = etäisyys ruuduissa, käytetään šakkietäisyytenä)
+
+const NAME_SYLLABLES_FIRST = ["El","Ar","Tha","Fen","Lor","Gal","Ys","Kael","Sil","Ner","Bri","Or","Mira","Ana","Eo","Wyn","Fae","Cor","Dra","Lia"];
+const NAME_SYLLABLES_SECOND = ["dor","wen","ion","riel","gard","mir","wyn","thas","lyn","ven","ric","dil","na","ra","th","dur","mor","syl","wen","drin"];
+
+const MELEE_WEAPONS = [
+  { name: "Puunuija", diceCount: 1, dice: 3, hitChance: 0.7, weight: 4 },
+  { name: "Sotamoukari", diceCount: 2, dice: 3, hitChance: 0.6, weight: 4 },
+  { name: "Miekka", diceCount: 1, dice: 4, hitChance: 0.7, weight: 4 },
+  { name: "Lumottu miekka", diceCount: 3, dice: 2, hitChance: 0.8, weight: 1 }
+];
+const RANGED_WEAPONS = [
+  { name: "Ritsa", diceCount: 1, dice: 2, hitChance: 0.5, weight: 4 },
+  { name: "Lyhytjousi", diceCount: 1, dice: 3, hitChance: 0.6, weight: 4 },
+  { name: "Varsijousi", diceCount: 2, dice: 2, hitChance: 0.7, weight: 4 },
+  { name: "Lumottu jousi", diceCount: 3, dice: 2, hitChance: 0.7, weight: 1 }
+];
+const POTIONS = [
+  { name: "Laastari", healAmount: 2 },
+  { name: "Metsän kyynel", healAmount: 4 },
+  { name: "Elvytysjuoma", healAmount: 6 }
+];
+const ENEMY_CLASSES = [
+  {
+    name: "Sotilas",
+    weight: 0.5,
+    hp: 8,
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 4, hitChance: 0.7 },
+    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 2, hitChance: 0.5 }
+  },
+  {
+    name: "Örkki",
+    weight: 0.4,
+    hp: 7,
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 3, hitChance: 0.8 },
+    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 3, hitChance: 0.6 }
+  },
+  {
+    name: "Peikko",
+    weight: 0.1,
+    hp: 15,
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 2, dice: 3, hitChance: 0.6 },
+    rangedWeapon: null
+  }
+];
+
+/* =========================================================
+   PELITILA
+   ========================================================= */
+let state = null;
+
+function newGameState(playerName){
+  return {
+    playerName: playerName,
+    player: { x: lastPlayerStart.x, y: lastPlayerStart.y, hp: 10, maxHp: 10, ap: 4 },
+    map: generateMap(),
+    enemies: generateEnemies(),
+    inventory: [
+      { id: cryptoId(), type: "weapon-melee", name: "Puunuija", diceCount: 1, dice: 3, hitChance: 0.7, equipped: true },
+      { id: cryptoId(), type: "weapon-ranged", name: "Ritsa", diceCount: 1, dice: 2, hitChance: 0.5, equipped: true }
+    ],
+    groundItems: {}, // key "x,y" -> array of items
+    corpses: [],
+    nonCombatStepsSinceHeal: 0,
+    inCombat: false,
+    activeEnemyId: null, // jos kysytään kohdetta jne. - varalla
+    turnCount: 0,
+    gameOver: false,
+    won: false,
+    logMessages: [], // uusin ensin
+    latestLogIsAction: false
+  };
+}
+
+function cryptoId(){
+  return "id" + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+}
+
+function rollDice(maxValue){
+  // 1..maxValue
+  return 1 + Math.floor(Math.random() * maxValue);
+}
+
+function rollDamage(weapon){
+  const count = weapon.diceCount || 1;
+  let total = 0;
+  for(let i=0; i<count; i++){
+    total += rollDice(weapon.dice);
+  }
+  return total;
+}
+
+
+/* =========================================================
+   ÄÄNITEHOSTEET
+   ========================================================= */
+const SFX = (function(){
+  let ctx = null;
+
+  function audioCtx(){
+    if(!ctx){
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+
+  function gainNode(volume, start, duration, attack){
+    const c = audioCtx();
+    const g = c.createGain();
+    const a = attack || 0.005;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), start + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    g.connect(c.destination);
+    return g;
+  }
+
+  function tone(freq, duration, type, volume, delay, endFreq){
+    const c = audioCtx();
+    const start = c.currentTime + (delay || 0);
+    const osc = c.createOscillator();
+    const g = gainNode(volume || 0.08, start, duration, 0.004);
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, start);
+    if(endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), start + duration);
+    osc.connect(g);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+
+  function noise(duration, volume, delay, filterType, filterFreq, q){
+    const c = audioCtx();
+    const start = c.currentTime + (delay || 0);
+    const bufferSize = Math.max(1, Math.floor(c.sampleRate * duration));
+    const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++) data[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buffer;
+    const filter = c.createBiquadFilter();
+    filter.type = filterType || "lowpass";
+    filter.frequency.setValueAtTime(filterFreq || 500, start);
+    filter.Q.setValueAtTime(q || 0.7, start);
+    const g = gainNode(volume || 0.08, start, duration, 0.002);
+    src.connect(filter);
+    filter.connect(g);
+    src.start(start);
+    src.stop(start + duration + 0.02);
+  }
+
+  function stepPair(){
+    noise(0.055, 0.055, 0, "lowpass", 320);
+    tone(85, 0.045, "triangle", 0.025, 0.004, 55);
+    setTimeout(()=>{
+      noise(0.035, 0.045, 0, "bandpass", 650);
+      tone(120, 0.025, "square", 0.018, 0.004, 70);
+    }, 135);
+  }
+
+  function warningLow(){
+    tone(130, 0.22, "sawtooth", 0.05, 0, 95);
+  }
+
+  function heal(){
+    tone(420, 0.08, "sine", 0.035, 0);
+    tone(560, 0.08, "sine", 0.035, 0.08);
+    tone(740, 0.12, "sine", 0.03, 0.16);
+  }
+
+  function pickup(){
+    tone(520, 0.055, "triangle", 0.035, 0);
+    tone(780, 0.08, "triangle", 0.03, 0.065);
+  }
+
+  function hitWhooshLong(){
+    noise(0.22, 0.10, 0, "bandpass", 760, 0.55);
+    tone(220, 0.18, "sine", 0.04, 0, 130);
+  }
+
+  return { stepPair, warningLow, heal, pickup, hitWhooshLong };
+})();
+
+function damageText(item){
+  const count = item.diceCount || 1;
+  return count + "d" + item.dice;
+}
+
+/* =========================================================
+   KARTAN GENEROINTI
+   ========================================================= */
+function generateMap(){
+  // Käytävämäinen kartta: ensin kaikki seinäksi, sitten mutkitteleva käytävä tyhjäksi.
+  const map = [];
+  for(let y=0; y<MAP_SIZE; y++){
+    const row = [];
+    for(let x=0; x<MAP_SIZE; x++){
+      row.push(TILE.WALL);
+    }
+    map.push(row);
+  }
+
+  let centerY = 7 + Math.floor(Math.random() * (MAP_SIZE - 14));
+  const centers = [];
+
+  for(let x=0; x<MAP_SIZE; x++){
+    if(x > 0 && Math.random() < 0.45){
+      centerY += Math.floor(Math.random()*3)-1;
+      centerY = Math.max(7, Math.min(MAP_SIZE - 8, centerY));
+    }
+    centers[x] = centerY;
+    const width = 12 + Math.floor(Math.random()*5); // keskimäärin noin 14 ruutua
+    const halfLow = Math.floor(width / 2);
+    const halfHigh = width - halfLow - 1;
+    for(let y=centerY-halfLow; y<=centerY+halfHigh; y++){
+      if(inBounds(x,y)) map[y][x] = TILE.EMPTY;
+    }
+  }
+
+  lastPlayerStart = { x: 2, y: centers[2] };
+
+  // Puita käytävään.
+  const treeCount = Math.floor(MAP_SIZE*MAP_SIZE*0.012);
+  for(let i=0;i<treeCount;i++){
+    const x = Math.floor(Math.random()*MAP_SIZE);
+    const y = Math.floor(Math.random()*MAP_SIZE);
+    if(map[y][x] !== TILE.EMPTY) continue;
+    if(chebyshevDist(x,y,lastPlayerStart.x,lastPlayerStart.y) < 4) continue;
+    map[y][x] = TILE.TREE;
+  }
+
+  // Satunnaisia seinäesteitä käytävään.
+  const wallCount = Math.floor(MAP_SIZE*MAP_SIZE*0.006);
+  for(let i=0;i<wallCount;i++){
+    const x = Math.floor(Math.random()*MAP_SIZE);
+    const y = Math.floor(Math.random()*MAP_SIZE);
+    if(map[y][x] !== TILE.EMPTY) continue;
+    if(chebyshevDist(x,y,lastPlayerStart.x,lastPlayerStart.y) < 4) continue;
+    map[y][x] = TILE.WALL;
+  }
+
+  map[lastPlayerStart.y][lastPlayerStart.x] = TILE.EMPTY;
+  return map;
+}
+
+function generateEnemies(){
+  const enemies = [];
+  let attempts = 0;
+  while(enemies.length < ENEMY_COUNT && attempts < 2000){
+    attempts++;
+    const x = Math.floor(Math.random()*MAP_SIZE);
+    const y = Math.floor(Math.random()*MAP_SIZE);
+    // ei liian lähellä pelaajan aloitusta, ei seinän/puun päällä
+    const start = lastPlayerStart || { x: 50, y: 50 };
+    const dist = Math.max(Math.abs(x-start.x), Math.abs(y-start.y));
+    if(dist < 6) continue;
+    if(state_map_tile_temp && state_map_tile_temp[y] && state_map_tile_temp[y][x] !== TILE.EMPTY) continue;
+    enemies.push(makeEnemy(x,y));
+  }
+  return enemies;
+}
+
+// generateMap kutsutaan ennen generateEnemies, mutta haluamme tarkistaa kartan -
+// korjataan järjestystä newGameState:ssa. Käytetään apumuuttujaa tilapäisesti.
+let state_map_tile_temp = null;
+let lastPlayerStart = { x: 50, y: 50 };
+
+function weightedChoice(items){
+  const total = items.reduce((sum, item)=>sum + (item.weight || 1), 0);
+  let roll = Math.random() * total;
+  for(const item of items){
+    roll -= item.weight || 1;
+    if(roll <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
+function cloneWeapon(weapon){
+  if(!weapon) return null;
+  return {
+    type: weapon.type,
+    name: weapon.name,
+    diceCount: weapon.diceCount || 1,
+    dice: weapon.dice,
+    hitChance: weapon.hitChance
+  };
+}
+
+function randomEnemyClass(){
+  const roll = Math.random();
+  let sum = 0;
+  for(const enemyClass of ENEMY_CLASSES){
+    sum += enemyClass.weight;
+    if(roll < sum) return enemyClass;
+  }
+  return ENEMY_CLASSES[ENEMY_CLASSES.length - 1];
+}
+
+function makeEnemy(x,y){
+  const enemyClass = randomEnemyClass();
+  return {
+    id: cryptoId(),
+    name: enemyClass.name,
+    x: x, y: y,
+    hp: enemyClass.hp,
+    maxHp: enemyClass.hp,
+    meleeWeapon: cloneWeapon(enemyClass.meleeWeapon),
+    rangedWeapon: cloneWeapon(enemyClass.rangedWeapon),
+    alive: true,
+    awareOfPlayer: false
+  };
+}
+// jälkikäteen täytetään maxHp
+function finalizeEnemy(e){ e.maxHp = e.maxHp || e.hp; return e; }
+
+/* =========================================================
+   APUFUNKTIOT: KARTTA / NÄKYMÄ
+   ========================================================= */
+function inBounds(x,y){
+  return x>=0 && x<MAP_SIZE && y>=0 && y<MAP_SIZE;
+}
+
+function tileAt(x,y){
+  if(!inBounds(x,y)) return TILE.WALL;
+  return state.map[y][x];
+}
+
+function isWalkable(x,y){
+  if(!inBounds(x,y)) return false;
+  const t = state.map[y][x];
+  return t === TILE.EMPTY;
+}
+
+function enemyAt(x,y){
+  return state.enemies.find(e => e.alive && e.x===x && e.y===y);
+}
+
+function corpseAt(x,y){
+  if(!state.corpses) state.corpses = [];
+  return state.corpses.find(c => c.x===x && c.y===y);
+}
+
+function itemsAt(x,y){
+  const key = x+","+y;
+  return state.groundItems[key] || [];
+}
+
+function setItemsAt(x,y,items){
+  const key = x+","+y;
+  if(items.length===0) delete state.groundItems[key];
+  else state.groundItems[key] = items;
+}
+
+function chebyshevDist(x1,y1,x2,y2){
+  return Math.max(Math.abs(x1-x2), Math.abs(y1-y2));
+}
+
+/* =========================================================
+   LOKI
+   ========================================================= */
+function addLog(message){
+  if(state && state.inCombat){
+    const enemyInfo = describeVisibleEnemies();
+    if(enemyInfo && !message.includes(enemyInfo)){
+      message += " " + enemyInfo;
+    }
+  }
+  state.logMessages.unshift(message);
+  state.latestLogIsAction = true;
+  if(state.logMessages.length > 1) state.logMessages.length = 1;
+  renderLog();
+}
+
+function renderLog(){
+  const lines = [
+    document.getElementById("log-line-0"),
+    document.getElementById("log-line-1"),
+    document.getElementById("log-line-2")
+  ];
+  for(let i=0;i<3;i++){
+    lines[i].textContent = state.logMessages[i] || "";
+  }
+}
+
+/* =========================================================
+   ESINEIDEN GENEROINTI MAAILMAAN (ALUSSA)
+   ========================================================= */
+function scatterItems(){
+  const itemCount = 14;
+  let placed = 0;
+  let attempts = 0;
+  while(placed < itemCount && attempts < 3000){
+    attempts++;
+    const x = Math.floor(Math.random()*MAP_SIZE);
+    const y = Math.floor(Math.random()*MAP_SIZE);
+    if(!isWalkable(x,y)) continue;
+    const start = lastPlayerStart || { x: 50, y: 50 };
+    if(chebyshevDist(x,y,start.x,start.y) < 3) continue;
+    if(enemyAt(x,y)) continue;
+    const item = randomWorldItem();
+    const existing = itemsAt(x,y);
+    existing.push(item);
+    setItemsAt(x,y, existing);
+    placed++;
+  }
+}
+
+function randomWorldItem(){
+  const roll = Math.random();
+  if(roll < 0.4){
+    const base = weightedChoice(MELEE_WEAPONS);
+    return { id: cryptoId(), type:"weapon-melee", name: base.name, diceCount: base.diceCount || 1, dice: base.dice, hitChance: base.hitChance, equipped:false };
+  } else if(roll < 0.75){
+    const base = weightedChoice(RANGED_WEAPONS);
+    return { id: cryptoId(), type:"weapon-ranged", name: base.name, diceCount: base.diceCount || 1, dice: base.dice, hitChance: base.hitChance, equipped:false };
+  } else {
+    const base = POTIONS[Math.floor(Math.random()*POTIONS.length)];
+    return { id: cryptoId(), type:"potion", name: base.name, healAmount: base.healAmount };
+  }
+}
+
+/* =========================================================
+   ALOITUS / UUSI PELI
+   ========================================================= */
+function startNewGame(playerName){
+  // generoidaan kartta ensin, sitten viholliset käyttäen sitä
+  const map = generateMap();
+  state_map_tile_temp = map;
+  const enemiesRaw = [];
+  let attempts = 0;
+  while(enemiesRaw.length < ENEMY_COUNT && attempts < 5000){
+    attempts++;
+    const x = Math.floor(Math.random()*MAP_SIZE);
+    const y = Math.floor(Math.random()*MAP_SIZE);
+    const start = lastPlayerStart || { x: 50, y: 50 };
+    const dist = Math.max(Math.abs(x-start.x), Math.abs(y-start.y));
+    if(dist < 6) continue;
+    if(map[y][x] !== TILE.EMPTY) continue;
+    if(enemiesRaw.some(e=>e.x===x && e.y===y)) continue;
+    enemiesRaw.push(finalizeEnemy(makeEnemy(x,y)));
+  }
+
+  state = {
+    playerName: playerName,
+    player: { x: lastPlayerStart.x, y: lastPlayerStart.y, hp: 10, maxHp: 10, ap: 4 },
+    map: map,
+    enemies: enemiesRaw,
+    inventory: [
+      { id: cryptoId(), type: "weapon-melee", name: "Puunuija", diceCount: 1, dice: 3, hitChance: 0.7, equipped: true },
+      { id: cryptoId(), type: "weapon-ranged", name: "Ritsa", diceCount: 1, dice: 2, hitChance: 0.5, equipped: true }
+    ],
+    groundItems: {},
+    corpses: [],
+    nonCombatStepsSinceHeal: 0,
+    inCombat: false,
+    activeEnemyId: null,
+    turnCount: 0,
+    gameOver: false,
+    won: false,
+    logMessages: [],
+    latestLogIsAction: false
+  };
+
+  scatterItems();
+
+  addLog("Seikkailu alkaa, " + playerName + "! Tutki ympäristöäsi ja löydä kaikki kymmenen vihollista.");
+  showGameScreen();
+  refreshAll();
+}
+
+/* =========================================================
+   NÄKYMÄN PÄIVITYS: KARTTA
+   ========================================================= */
+function renderMap(){
+  const grid = document.getElementById("map-grid");
+  grid.innerHTML = "";
+  const p = state.player;
+
+  for(let dy=-VIEW_RADIUS; dy<=VIEW_RADIUS; dy++){
+    for(let dx=-VIEW_RADIUS; dx<=VIEW_RADIUS; dx++){
+      const x = p.x+dx;
+      const y = p.y+dy;
+      const cell = document.createElement("div");
+      cell.className = "cell";
+
+      let visual = "";
+      let srText = "";
+
+      if(dx===0 && dy===0){
+        cell.classList.add("player");
+        visual = "🧙";
+        srText = "Sinä";
+      } else if(!inBounds(x,y)){
+        visual = "▓";
+        srText = "Kartan reuna";
+      } else {
+        const tile = tileAt(x,y);
+        const enemy = enemyAt(x,y);
+        const items = itemsAt(x,y);
+        const corpse = corpseAt(x,y);
+        if(enemy){
+          visual = "👹";
+          srText = enemy.name;
+        } else if(corpse){
+          visual = "☠";
+          srText = "Ruumis: " + corpse.name;
+        } else if(tile === TILE.TREE){
+          visual = "🌲";
+          srText = "Puu";
+        } else if(tile === TILE.WALL){
+          visual = "🧱";
+          srText = "Seinä";
+        } else if(items.length>0){
+          visual = "✨";
+          srText = "Esine maassa";
+        } else {
+          visual = "";
+          srText = "-";
+        }
+      }
+
+      cell.textContent = visual;
+      const sr = document.createElement("span");
+      sr.className = "sr-only";
+      sr.textContent = srText;
+      cell.appendChild(sr);
+      grid.appendChild(cell);
+    }
+  }
+}
+
+/* =========================================================
+   YMPÄRISTÖN TEKSTIKUVAUS
+   ========================================================= */
+function describeSurroundings(){
+  const p = state.player;
+  const descriptions = [];
+
+  for(const dir of DIRECTIONS){
+    // etsi lähin kiinnostava asia tässä suunnassa, säde 1-3
+    for(let dist=1; dist<=VIEW_RADIUS; dist++){
+      const x = p.x + dir.dx*dist;
+      const y = p.y + dir.dy*dist;
+      if(!inBounds(x,y)){
+        descriptions.push("Kartan reuna " + dir.name + ", " + dist);
+        break;
+      }
+      const enemy = enemyAt(x,y);
+      if(enemy){
+        descriptions.push("Vihollinen (" + enemy.name + ") " + dir.name + ", " + dist);
+        break;
+      }
+      const corpse = corpseAt(x,y);
+      if(corpse){
+        descriptions.push("Ruumis " + dir.name + ", " + dist);
+        break;
+      }
+      const tile = tileAt(x,y);
+      if(tile === TILE.TREE){
+        descriptions.push("Puu " + dir.name + ", " + dist);
+        break;
+      }
+      if(tile === TILE.WALL){
+        descriptions.push("Seinä " + dir.name + ", " + dist);
+        break;
+      }
+      const items = itemsAt(x,y);
+      if(items.length>0){
+        descriptions.push("Esine " + dir.name + ", " + dist);
+        break;
+      }
+      // jos tultiin viimeiselle etäisyydelle ja mitään ei löytynyt - ei mainita mitään tästä suunnasta
+    }
+  }
+
+  if(descriptions.length===0){
+    return " ";
+  }
+  return descriptions.join(" ");
+}
+
+function describeVisibleEnemies(){
+  if(!state) return "";
+  const p = state.player;
+  const descriptions = [];
+
+  for(const dir of DIRECTIONS){
+    for(let dist=1; dist<=VIEW_RADIUS; dist++){
+      const x = p.x + dir.dx*dist;
+      const y = p.y + dir.dy*dist;
+      if(!inBounds(x,y)) break;
+      const enemy = enemyAt(x,y);
+      if(enemy){
+        descriptions.push("Vihollinen (" + enemy.name + ") " + dir.name + ", " + dist);
+        break;
+      }
+    }
+  }
+
+  return descriptions.join(" ");
+}
+
+/* =========================================================
+   PÄIVITYS: TILA, TOIMINNOT, TAVARAT
+   ========================================================= */
+function updateInCombatStatus(){
+  // taisteluvuoro on käynnissä jos näköetäisyydellä (7x7) on elävä vihollinen
+  const p = state.player;
+  const visibleEnemy = state.enemies.some(e => e.alive && chebyshevDist(e.x,e.y,p.x,p.y) <= VIEW_RADIUS);
+  const wasInCombat = state.inCombat;
+  state.inCombat = visibleEnemy;
+
+  if(state.inCombat && !wasInCombat){
+    state.player.ap = 4;
+    state.turnCount = 1;
+    addLog("Vihollinen näkyvissä! Taistelu alkaa. " + describeVisibleEnemies());
+  }
+  if(!state.inCombat && wasInCombat){
+    state.player.ap = 0;
+    addLog("Vihollinen ei ole enää näkyvissä.");
+  }
+}
+
+function renderStatus(){
+  document.getElementById("ap-value").textContent = state.player.ap;
+  document.getElementById("hp-value").textContent = Math.max(0,state.player.hp);
+  document.getElementById("hp-status").lastElementChild.parentElement; // no-op
+  const apStatus = document.getElementById("ap-status");
+  const turnStatus = document.getElementById("turn-status");
+  const endTurnBtn = document.getElementById("end-turn-btn");
+  if(state.inCombat){
+    apStatus.hidden = false;
+    turnStatus.hidden = false;
+    document.getElementById("turn-value").textContent = state.turnCount;
+    endTurnBtn.hidden = false;
+  } else {
+    apStatus.hidden = false; // pidetään näkyvissä myös perustilanteessa selkeyden vuoksi
+    turnStatus.hidden = true;
+    endTurnBtn.hidden = true;
+  }
+}
+
+function nearbyEnemiesWithin(range){
+  const p = state.player;
+  return state.enemies.filter(e => e.alive && chebyshevDist(e.x,e.y,p.x,p.y) <= range);
+}
+
+function adjacentEnemies(){
+  // melee = chebyshev distance 1
+  return nearbyEnemiesWithin(1);
+}
+
+function rangedTargets(){
+  const p = state.player;
+  return state.enemies.filter(e => e.alive && chebyshevDist(e.x,e.y,p.x,p.y) > 1 && chebyshevDist(e.x,e.y,p.x,p.y) <= VIEW_RADIUS);
+}
+
+function getEquipped(type){
+  return state.inventory.find(it => it.type===type && it.equipped);
+}
+
+function renderActions(){
+  const attackBtn = document.getElementById("attack-btn");
+  const shootBtn = document.getElementById("shoot-btn");
+
+  const meleeWeapon = getEquipped("weapon-melee");
+  const rangedWeapon = getEquipped("weapon-ranged");
+
+  const canAttack = state.inCombat && state.player.ap>=2 && adjacentEnemies().length>0 && meleeWeapon && !state.gameOver;
+  const canShoot = state.inCombat && state.player.ap>=2 && rangedTargets().length>0 && rangedWeapon && !state.gameOver;
+
+  attackBtn.disabled = !canAttack;
+  shootBtn.disabled = !canShoot;
+
+  attackBtn.textContent = meleeWeapon ? ("Lyö (" + meleeWeapon.name + ", 2 AP)") : "Lyö (ei lähiasetta, 2 AP)";
+  shootBtn.textContent = rangedWeapon ? ("Ammu (" + rangedWeapon.name + ", 2 AP)") : "Ammu (ei kauko-asetta, 2 AP)";
+
+  // liikkumispainikkeet
+  const moveBtns = document.querySelectorAll(".move-grid button[data-dir]");
+  moveBtns.forEach(btn=>{
+    const dx = parseInt(btn.dataset.dx,10);
+    const dy = parseInt(btn.dataset.dy,10);
+    const targetX = state.player.x+dx;
+    const targetY = state.player.y+dy;
+    let canMove = isWalkable(targetX,targetY) && !enemyAt(targetX,targetY) && !state.gameOver;
+    if(state.inCombat){
+      canMove = canMove && state.player.ap>=2;
+    }
+    btn.disabled = !canMove;
+  });
+
+  document.getElementById("end-turn-btn").disabled = !state.inCombat || state.gameOver;
+}
+
+function renderInventory(){
+  const list = document.getElementById("inventory-list");
+  list.innerHTML = "";
+
+  if(state.inventory.length===0){
+    const li = document.createElement("li");
+    li.textContent = "Tavaraluettelo on tyhjä.";
+    list.appendChild(li);
+    return;
+  }
+
+  state.inventory.forEach(item=>{
+    const li = document.createElement("li");
+
+    const label = document.createElement("span");
+    let desc = item.name;
+    if(item.type==="weapon-melee" || item.type==="weapon-ranged"){
+      desc += " (vahinko " + damageText(item) + ", osumatodennäköisyys " + Math.round(item.hitChance*100) + "%)";
+      if(item.equipped){
+        desc += " — käytössä";
+        label.className = "equipped";
+      }
+    } else if(item.type==="potion"){
+      desc += " (parantaa " + item.healAmount + " HP)";
+    }
+    label.textContent = desc;
+    label.id = "inv-label-" + item.id;
+    li.appendChild(label);
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+
+    if(item.type==="weapon-melee" || item.type==="weapon-ranged"){
+      if(!item.equipped){
+        const equipBtn = document.createElement("button");
+        equipBtn.type = "button";
+        equipBtn.textContent = "Käytä asetta";
+        equipBtn.setAttribute("aria-describedby","inv-label-"+item.id);
+        equipBtn.addEventListener("click", ()=>equipItem(item.id));
+        actions.appendChild(equipBtn);
+      }
+    } else if(item.type==="potion"){
+      const useBtn = document.createElement("button");
+      useBtn.type = "button";
+      useBtn.textContent = "Käytä lääke";
+      useBtn.setAttribute("aria-describedby","inv-label-"+item.id);
+      useBtn.addEventListener("click", ()=>usePotion(item.id));
+      actions.appendChild(useBtn);
+    }
+
+    const dropBtn = document.createElement("button");
+    dropBtn.type = "button";
+    dropBtn.textContent = "Heitä pois";
+    dropBtn.setAttribute("aria-describedby","inv-label-"+item.id);
+    dropBtn.addEventListener("click", ()=>dropItem(item.id));
+    actions.appendChild(dropBtn);
+
+    li.appendChild(actions);
+    list.appendChild(li);
+  });
+}
+
+function refreshAll(){
+  if(state.gameOver) return checkGameOverRendering();
+  updateInCombatStatus();
+  renderMap();
+  document.getElementById("log-line-0").dataset.placeholderSet = "1";
+  // Jos edellinen toiminto lisäsi lokiviestin, sitä ei peitetä ympäristökuvauksella.
+  // Muuten näytetään viimeisimmän vuoron ympäristötieto.
+  renderSurroundingsLine();
+  renderStatus();
+  renderActions();
+  renderInventory();
+}
+
+let lastSurroundingsText = "";
+function renderSurroundingsLine(){
+  if(state.latestLogIsAction){
+    state.latestLogIsAction = false;
+    renderLog();
+    return;
+  }
+  const text = describeSurroundings();
+  if(text !== lastSurroundingsText || text === " "){
+    state.logMessages.unshift(text);
+    if(state.logMessages.length > 1) state.logMessages.length = 1;
+    lastSurroundingsText = text;
+  }
+  renderLog();
+}
+
+function checkGameOverRendering(){
+  renderMap();
+  renderStatus();
+  document.getElementById("attack-btn").disabled = true;
+  document.getElementById("shoot-btn").disabled = true;
+  document.getElementById("end-turn-btn").disabled = true;
+  document.querySelectorAll(".move-grid button[data-dir]").forEach(b=>b.disabled=true);
+  renderInventory();
+  renderLog();
+}
+
+/* =========================================================
+   PARANEMINEN EI-TAISTELUN AIKANA
+   ========================================================= */
+function handleNonCombatStepHealing(){
+  if(typeof state.nonCombatStepsSinceHeal !== "number") state.nonCombatStepsSinceHeal = 0;
+  state.nonCombatStepsSinceHeal += 1;
+  if(state.nonCombatStepsSinceHeal >= 60 && state.player.hp < state.player.maxHp){
+    state.nonCombatStepsSinceHeal -= 60;
+    state.player.hp = Math.min(state.player.maxHp, state.player.hp + 1);
+    return "Paranit 1 pisteen";
+  }
+  if(state.player.hp >= state.player.maxHp && state.nonCombatStepsSinceHeal >= 60){
+    state.nonCombatStepsSinceHeal = state.nonCombatStepsSinceHeal % 60;
+  }
+  return "";
+}
+
+/* =========================================================
+   LIIKKUMINEN
+   ========================================================= */
+function tryMove(dx,dy){
+  if(state.gameOver) return;
+  const wasInCombatAtMoveStart = state.inCombat;
+  const p = state.player;
+  const targetX = p.x+dx;
+  const targetY = p.y+dy;
+
+  if(!isWalkable(targetX,targetY)){
+    SFX.warningLow();
+    return;
+  }
+  if(enemyAt(targetX,targetY)){
+    SFX.warningLow();
+    return;
+  }
+
+  if(state.inCombat){
+    if(state.player.ap < 2){
+      addLog("Ei tarpeeksi toimintapisteitä liikkumiseen.");
+      return;
+    }
+    state.player.ap -= 2;
+  }
+
+  p.x = targetX;
+  p.y = targetY;
+  SFX.stepPair();
+
+  let healingMessage = "";
+  if(!wasInCombatAtMoveStart){
+    healingMessage = handleNonCombatStepHealing();
+  }
+
+  // tarkista esineet
+  const items = itemsAt(p.x,p.y);
+  if(items.length>0){
+    refreshAll();
+    if(healingMessage){ SFX.heal(); addLog(healingMessage); state.latestLogIsAction = false; }
+    SFX.pickup();
+    offerItemPickup(items[0]);
+    return; // refresh tapahtuu modaalin sulkeuduttua
+  }
+
+  refreshAll();
+  if(healingMessage){ SFX.heal(); addLog(healingMessage); state.latestLogIsAction = false; }
+  if(state.inCombat) maybeAutoEndTurn();
+}
+
+/* =========================================================
+   ESINEEN POIMINTA
+   ========================================================= */
+function offerItemPickup(item){
+  let desc = "Löysit esineen: " + item.name + ".";
+  if(item.type==="weapon-melee" || item.type==="weapon-ranged"){
+    desc += " Vahinko " + damageText(item) + ", osumatarkkuus " + Math.round(item.hitChance*100) + "%.";
+  } else if(item.type==="potion"){
+    desc += " Parantaa " + item.healAmount + " HP käytettäessä.";
+  }
+  desc += " Haluatko ottaa sen?";
+
+  showModal("Esine löytyi", desc, [
+    {
+      label: "Ota esine",
+      action: ()=>{
+        if(state.inventory.length >= INVENTORY_MAX){
+          addLog("Tavaraluettelo on täynnä (6/6). Et voinut ottaa esinettä: " + item.name + ".");
+        } else {
+          state.inventory.push(item);
+          const remaining = itemsAt(state.player.x,state.player.y).filter(it=>it.id!==item.id);
+          setItemsAt(state.player.x,state.player.y, remaining);
+          SFX.pickup();
+          addLog("Otit esineen: " + item.name + ".");
+        }
+        refreshAll();
+        if(state.inCombat) maybeAutoEndTurn();
+      }
+    },
+    {
+      label: "Jätä esine",
+      action: ()=>{
+        addLog("Jätit esineen maahan: " + item.name + ".");
+        refreshAll();
+        if(state.inCombat) maybeAutoEndTurn();
+      }
+    }
+  ]);
+}
+
+/* =========================================================
+   TAVAROIDEN HALLINTA
+   ========================================================= */
+function equipItem(itemId){
+  const item = state.inventory.find(i=>i.id===itemId);
+  if(!item) return;
+  // poista equipped-lippu samantyyppisiltä
+  state.inventory.forEach(i=>{
+    if(i.type===item.type) i.equipped = false;
+  });
+  item.equipped = true;
+  addLog("Otit käyttöön: " + item.name + ".");
+  refreshAll();
+}
+
+function usePotion(itemId){
+  const item = state.inventory.find(i=>i.id===itemId);
+  if(!item) return;
+  const before = state.player.hp;
+  state.player.hp = Math.min(state.player.maxHp, state.player.hp + item.healAmount);
+  const healed = state.player.hp - before;
+  state.inventory = state.inventory.filter(i=>i.id!==itemId);
+  addLog("Käytit lääkkeen " + item.name + " ja paransit " + healed + " HP. Terveytesi on nyt " + state.player.hp + "/" + state.player.maxHp + ".");
+  refreshAll();
+}
+
+function dropItem(itemId){
+  const item = state.inventory.find(i=>i.id===itemId);
+  if(!item) return;
+  state.inventory = state.inventory.filter(i=>i.id!==itemId);
+  const ground = itemsAt(state.player.x,state.player.y);
+  ground.push(item);
+  setItemsAt(state.player.x,state.player.y, ground);
+  addLog("Heitit pois esineen: " + item.name + ".");
+  refreshAll();
+}
+
+/* =========================================================
+   TAISTELU: LYÖNTI JA AMPUMINEN
+   ========================================================= */
+function performAttack(){
+  if(state.gameOver) return;
+  const meleeWeapon = getEquipped("weapon-melee");
+  if(!meleeWeapon){
+    addLog("Sinulla ei ole käytössä lähiasetta.");
+    return;
+  }
+  if(state.player.ap < 2){
+    addLog("Sinulla ei ole tarpeeksi toimintapisteitä lyömiseen.");
+    return;
+  }
+  const targets = adjacentEnemies();
+  if(targets.length===0){
+    addLog("Ei vihollisia lyöntietäisyydellä.");
+    return;
+  }
+  if(targets.length===1){
+    resolveAttack(targets[0], meleeWeapon, "melee");
+  } else {
+    showTargetSelection(targets, (target)=>resolveAttack(target, meleeWeapon, "melee"));
+  }
+}
+
+function performShoot(){
+  if(state.gameOver) return;
+  const rangedWeapon = getEquipped("weapon-ranged");
+  if(!rangedWeapon){
+    addLog("Sinulla ei ole käytössä kauko-asetta.");
+    return;
+  }
+  if(state.player.ap < 2){
+    addLog("Sinulla ei ole tarpeeksi toimintopisteitä ampumiseen.");
+    return;
+  }
+  const targets = rangedTargets();
+  if(targets.length===0){
+    addLog("Ei vihollisia näkyvissä ampumiseen.");
+    return;
+  }
+  if(targets.length===1){
+    resolveAttack(targets[0], rangedWeapon, "ranged");
+  } else {
+    showTargetSelection(targets, (target)=>resolveAttack(target, rangedWeapon, "ranged"));
+  }
+}
+
+function showTargetSelection(targets, onChosen){
+  const buttons = targets.map(t=>({
+    label: t.name + " (HP " + t.hp + "/" + t.maxHp + ")",
+    action: ()=>{ onChosen(t); }
+  }));
+  showModal("Valitse kohde", "Useita vihollisia on kantamassa. Valitse, mihin kohdistat hyökkäyksen.", buttons);
+}
+
+function resolveAttack(enemy, weapon, mode){
+  state.player.ap -= 2;
+  const hit = Math.random() < weapon.hitChance;
+  const verb = mode==="melee" ? "Lyöt" : "Ammut";
+
+  if(!hit){
+    addLog(verb + " kohti " + enemy.name + " mutta et osu.");
+  } else {
+    SFX.hitWhooshLong();
+    const dmg = rollDamage(weapon);
+    enemy.hp -= dmg;
+    addLog(verb + " " + enemy.name + " ja osut: " + dmg + " vahinkoa.");
+    if(enemy.hp <= 0){
+      enemy.alive = false;
+      if(!state.corpses) state.corpses = [];
+      state.corpses.push({ x: enemy.x, y: enemy.y, name: enemy.name });
+      addLog(enemy.name + " kuolee.");
+      checkVictory();
+    }
+  }
+
+  refreshAll();
+  if(!state.gameOver) maybeAutoEndTurn();
+}
+
+/* =========================================================
+   VOITTO / TAPPIO
+   ========================================================= */
+function checkVictory(){
+  const allDead = state.enemies.every(e=>!e.alive);
+  if(allDead){
+    state.gameOver = true;
+    state.won = true;
+    addLog("Kaikki viholliset on kukistettu! Voitit pelin.");
+    refreshAll();
+    showModal("Voitto!", "Olet kukistanut kaikki kymmenen vihollista. Seikkailu on ohi - hyvin tehty, " + state.playerName + "!", [
+      { label: "Aloita uusi peli", action: ()=>{ goToStartScreen(); } }
+    ]);
+  }
+}
+
+function checkDefeat(){
+  if(state.player.hp <= 0){
+    state.gameOver = true;
+    addLog("Sait kuolettavan vahingon. Peli päättyy.");
+    refreshAll();
+    showModal("Peli päättyi", "Hahmosi " + state.playerName + " kaatui taistelussa.", [
+      { label: "Aloita uusi peli", action: ()=>{ goToStartScreen(); } }
+    ]);
+    return true;
+  }
+  return false;
+}
+
+/* =========================================================
+   VUORON LOPETUS JA VIHOLLISTEN TOIMINTA
+   ========================================================= */
+function maybeAutoEndTurn(){
+  if(!state.inCombat) return;
+  if(state.player.ap <= 0){
+    const previousMessage = state.logMessages[0] || "Toimintapisteet loppuivat - vuoro siirtyy vihollisille.";
+    endTurn(previousMessage);
+  }
+}
+
+function enemyMaxAp(enemy){
+  return (enemy.name === "Sotilas" || enemy.name === "Örkki") ? 4 : 2;
+}
+
+function endTurn(previousMessage){
+  if(state.gameOver) return;
+  if(!state.inCombat){
+    addLog("Ei taistelua käynnissä.");
+    return;
+  }
+
+  const messages = [];
+  if(previousMessage) messages.push(previousMessage);
+
+  const activeEnemies = state.enemies.filter(e=>e.alive && chebyshevDist(e.x,e.y,state.player.x,state.player.y) <= VIEW_RADIUS);
+
+  for(const enemy of activeEnemies){
+    if(state.gameOver) break;
+    enemy.ap = enemyMaxAp(enemy);
+    while(enemy.ap >= 2){
+      const enemyMessage = enemyTakeTurn(enemy);
+      enemy.ap -= 2;
+      if(enemyMessage) messages.push(enemyMessage);
+      if(state.player.hp <= 0){
+        state.gameOver = true;
+        messages.push("Sait kuolettavan vahingon. Peli päättyy.");
+        addLog(messages.join(" "));
+        refreshAll();
+        showModal("Peli päättyi", "Hahmosi " + state.playerName + " kaatui taistelussa.", [
+          { label: "Aloita uusi peli", action: ()=>{ goToStartScreen(); } }
+        ]);
+        return;
+      }
+    }
+  }
+
+  if(!state.gameOver){
+    state.turnCount += 1;
+    state.player.ap = 4;
+    messages.push("Uusi vuoro alkaa.");
+    addLog(messages.join(" "));
+    refreshAll();
+  }
+}
+
+function enemyTakeTurn(enemy){
+  const p = state.player;
+  const dist = chebyshevDist(enemy.x,enemy.y,p.x,p.y);
+
+  // Vieressä vihollinen käyttää vain lähihyökkäystä. Kaukoaseita käytetään vasta etäisyydeltä 2-3.
+  if(dist <= 1 && enemy.meleeWeapon){
+    return enemyAttackPlayer(enemy, enemy.meleeWeapon, "melee");
+  } else if(dist > 1 && dist <= VIEW_RADIUS && enemy.rangedWeapon){
+    return enemyAttackPlayer(enemy, enemy.rangedWeapon, "ranged");
+  } else {
+    enemyMoveTowardsOrRandom(enemy);
+    return "";
+  }
+}
+
+function enemyAttackPlayer(enemy, weapon, mode){
+  const verb = mode==="melee" ? "lyö" : "ampuu";
+  const hit = Math.random() < weapon.hitChance;
+  if(!hit){
+    return enemy.name + " " + verb + " kohti sinua, mutta ei osu.";
+  } else {
+    SFX.hitWhooshLong();
+    const dmg = rollDamage(weapon);
+    state.player.hp -= dmg;
+    state.nonCombatStepsSinceHeal = 0;
+    return enemy.name + " " + verb + " sinua ja osuu: " + dmg + " vahinkoa. Terveytesi on " + Math.max(0,state.player.hp) + "/" + state.player.maxHp + ".";
+  }
+}
+
+function enemyMoveTowardsOrRandom(enemy){
+  const p = state.player;
+  let dx = 0, dy = 0;
+
+  // Peikko pyrkii aina lähelle; muut viholliset liikkuvat useimmiten kohti pelaajaa.
+  if(enemy.name === "Peikko" || Math.random() < 0.6){
+    dx = Math.sign(p.x - enemy.x);
+    dy = Math.sign(p.y - enemy.y);
+  } else {
+    dx = Math.floor(Math.random()*3)-1;
+    dy = Math.floor(Math.random()*3)-1;
+  }
+
+  const targetX = enemy.x+dx;
+  const targetY = enemy.y+dy;
+
+  if(dx===0 && dy===0) return;
+  if(!isWalkable(targetX,targetY)) return;
+  if(targetX===p.x && targetY===p.y) return; // ei astuta pelaajan päälle
+  if(enemyAt(targetX,targetY)) return;
+
+  enemy.x = targetX;
+  enemy.y = targetY;
+}
+
+/* =========================================================
+   MODAALI
+   ========================================================= */
+let modalReturnFocus = null;
+
+function showModal(title, desc, buttons){
+  modalReturnFocus = document.activeElement;
+  document.getElementById("modal-title").textContent = title;
+  document.getElementById("modal-desc").textContent = desc;
+  const btnContainer = document.getElementById("modal-buttons");
+  btnContainer.innerHTML = "";
+
+  buttons.forEach((b,idx)=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = b.label;
+    btn.addEventListener("click", ()=>{
+      hideModal();
+      b.action();
+    });
+    btnContainer.appendChild(btn);
+  });
+
+  const overlay = document.getElementById("modal-overlay");
+  overlay.classList.add("active");
+
+  // fokus ensimmäiseen painikkeeseen
+  setTimeout(()=>{
+    const first = btnContainer.querySelector("button");
+    if(first) first.focus();
+  }, 10);
+}
+
+function hideModal(){
+  const overlay = document.getElementById("modal-overlay");
+  overlay.classList.remove("active");
+  if(modalReturnFocus && document.body.contains(modalReturnFocus)){
+    modalReturnFocus.focus();
+  }
+}
+
+// ESC sulkee modaalin vain jos siinä on vain yksi vaihtoehto (turvallisuus: useat valinnat vaativat valinnan)
+document.getElementById("modal-overlay").addEventListener("keydown",(e)=>{
+  if(e.key === "Escape"){
+    const buttons = document.querySelectorAll("#modal-buttons button");
+    if(buttons.length === 1){
+      buttons[0].click();
+    }
+  }
+});
+
+/* =========================================================
+   TALLENNUS / LATAUS
+   ========================================================= */
+function saveGame(){
+  try{
+    const data = JSON.stringify(state);
+    localStorage.setItem(SAVE_KEY, data);
+    addLog("Peli tallennettu.");
+    refreshAll();
+  }catch(err){
+    addLog("Tallennus epäonnistui.");
+    refreshAll();
+  }
+}
+
+function loadGame(){
+  const raw = localStorage.getItem(SAVE_KEY);
+  if(!raw){
+    document.getElementById("load-status").textContent = "Tallennusta ei löytynyt.";
+    return false;
+  }
+  try{
+    const loaded = JSON.parse(raw);
+    state = loaded;
+    if(!state.corpses) state.corpses = [];
+    if(typeof state.nonCombatStepsSinceHeal !== "number") state.nonCombatStepsSinceHeal = 0;
+    if(typeof state.latestLogIsAction !== "boolean") state.latestLogIsAction = false;
+    state.inventory.forEach(item=>{ if((item.type==="weapon-melee" || item.type==="weapon-ranged") && !item.diceCount) item.diceCount = 1; });
+    state.enemies.forEach(enemy=>{
+      if(enemy.alive && !enemy.meleeWeapon && enemy.weapon){
+        if(enemy.weapon.type === "melee") enemy.meleeWeapon = Object.assign({ diceCount: 1 }, enemy.weapon);
+        if(enemy.weapon.type === "ranged") enemy.rangedWeapon = Object.assign({ diceCount: 1 }, enemy.weapon);
+      }
+    });
+    lastSurroundingsText = "";
+    showGameScreen();
+    addLog("Peli ladattu.");
+    refreshAll();
+    return true;
+  }catch(err){
+    document.getElementById("load-status").textContent = "Tallennuksen lataaminen epäonnistui.";
+    return false;
+  }
+}
+
+function hasSaveGame(){
+  return !!localStorage.getItem(SAVE_KEY);
+}
+
+/* =========================================================
+   NÄYTTÖJEN VAIHTO
+   ========================================================= */
+function showGameScreen(){
+  document.getElementById("start-screen").style.display = "none";
+  const gs = document.getElementById("game-screen");
+  gs.classList.add("active");
+  gs.style.display = "block";
+  document.querySelector("h1").textContent = "Barbaari - " + state.playerName;
+  // fokus ensimmäiseen otsikkoon pelinäytössä
+  const heading = gs.querySelector("h2");
+  if(heading){
+    heading.setAttribute("tabindex","-1");
+    heading.focus();
+  }
+}
+
+function goToStartScreen(){
+  document.getElementById("game-screen").style.display = "none";
+  document.getElementById("game-screen").classList.remove("active");
+  document.getElementById("start-screen").style.display = "block";
+  document.querySelector("h1").textContent = "Barbaarin seikkailut";
+  document.getElementById("player-name-input").value = "";
+  document.getElementById("name-status").textContent = "";
+  document.getElementById("load-status").textContent = hasSaveGame() ? "" : "Tallennusta ei löytynyt.";
+  document.getElementById("player-name-input").focus();
+  state = null;
+}
+
+/* =========================================================
+   NIMIGENERAATTORI
+   ========================================================= */
+function generateFantasyName(){
+  const first = NAME_SYLLABLES_FIRST[Math.floor(Math.random()*NAME_SYLLABLES_FIRST.length)];
+  const second = NAME_SYLLABLES_SECOND[Math.floor(Math.random()*NAME_SYLLABLES_SECOND.length)];
+  return first+second;
+}
+
+/* =========================================================
+   TAPAHTUMANKÄSITTELIJÄT
+   ========================================================= */
+document.getElementById("suggest-name-btn").addEventListener("click", ()=>{
+  const name = generateFantasyName();
+  document.getElementById("player-name-input").value = name;
+  document.getElementById("name-status").textContent = "Ehdotettu nimi: " + name;
+});
+
+document.getElementById("start-game-btn").addEventListener("click", ()=>{
+  let name = document.getElementById("player-name-input").value.trim();
+  if(!name){
+    name = generateFantasyName();
+    document.getElementById("player-name-input").value = name;
+  }
+  startNewGame(name);
+});
+
+document.getElementById("load-game-btn").addEventListener("click", ()=>{
+  loadGame();
+});
+
+document.getElementById("attack-btn").addEventListener("click", performAttack);
+document.getElementById("shoot-btn").addEventListener("click", performShoot);
+document.getElementById("end-turn-btn").addEventListener("click", endTurn);
+document.getElementById("save-game-btn").addEventListener("click", saveGame);
+document.getElementById("new-game-btn").addEventListener("click", ()=>{
+  showModal("Aloita uusi peli", "Haluatko varmasti aloittaa uuden pelin? Nykyinen tallentamaton edistyminen häviää.", [
+    { label: "Kyllä, aloita uusi peli", action: ()=>{ goToStartScreen(); } },
+    { label: "Peruuta", action: ()=>{} }
+  ]);
+});
+
+document.querySelectorAll(".move-grid button[data-dir]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const dx = parseInt(btn.dataset.dx,10);
+    const dy = parseInt(btn.dataset.dy,10);
+    tryMove(dx,dy);
+  });
+});
+
+// numpad-näppäimet
+const NUMPAD_MAP = {
+  "1": [-1,1], "2":[0,1], "3":[1,1],
+  "4": [-1,0], "6":[1,0],
+  "7": [-1,-1], "8":[0,-1], "9":[1,-1]
+};
+
+document.addEventListener("keydown",(e)=>{
+  if(!state || state.gameOver) return;
+  if(document.getElementById("modal-overlay").classList.contains("active")) return;
+  // älä häiritse tekstikenttiä (aloitusnäytöllä ei ole pelitila aktiivinen, mutta varmuuden vuoksi)
+  const tag = document.activeElement.tagName;
+  if(tag === "INPUT" || tag === "TEXTAREA") return;
+
+  if(e.key === "5"){
+    e.preventDefault();
+    performAttack();
+    return;
+  }
+  if(e.key === "0"){
+    e.preventDefault();
+    performShoot();
+    return;
+  }
+
+  const move = NUMPAD_MAP[e.key];
+  if(move){
+    e.preventDefault();
+    tryMove(move[0], move[1]);
+  }
+});
+
+/* =========================================================
+   INIT
+   ========================================================= */
+document.getElementById("load-status").textContent = hasSaveGame() ? "Tallennettu peli löytyi." : "";
+document.getElementById("player-name-input").focus();
+
+})();
+</script>
+</body>
+</html>
