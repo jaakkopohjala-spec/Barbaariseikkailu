@@ -222,6 +222,138 @@
   }
 
   .small-note{ color:var(--muted); font-size:0.9rem; }
+
+
+  /* --- Tiivistetty mobiilinäkymä --- */
+  @media (max-width: 700px){
+    .wrap{
+      max-width:100%;
+      padding:0.35rem;
+    }
+    h1{
+      font-size:1rem;
+      margin:0 0 0.25rem 0;
+      line-height:1.15;
+    }
+    #game-screen.active{
+      display:flex !important;
+      flex-direction:column;
+    }
+    #game-screen > h2{
+      font-size:0.88rem;
+      margin:0.25rem 0 0.12rem 0;
+      padding-bottom:0.08rem;
+    }
+    #game-screen > h2:nth-of-type(1){ order:1; }
+    #map-grid{
+      order:2;
+      width:min(96vw, 34dvh, 310px);
+      max-width:min(96vw, 34dvh, 310px);
+      gap:1px;
+      border-width:1px;
+      padding:2px;
+    }
+    .cell{
+      font-size:clamp(0.9rem, 4vw, 1.15rem);
+      border-radius:2px;
+    }
+    #status-line{
+      order:3;
+      gap:0.25rem;
+      margin-top:0.25rem;
+      font-size:0.8rem;
+    }
+    #status-line span{
+      padding:0.12rem 0.35rem;
+    }
+    #actions-heading{
+      order:4;
+    }
+    #actions{
+      order:5;
+    }
+    #actions fieldset{
+      padding:0.25rem;
+      margin:0.15rem 0;
+    }
+    #actions fieldset:first-child legend{
+      display:none;
+    }
+    #actions legend{
+      font-size:0.78rem;
+    }
+    .action-btns{
+      gap:0.35rem;
+      margin-bottom:0.2rem;
+      justify-content:center;
+    }
+    .action-btns button{
+      font-size:0.9rem;
+      padding:0.35rem 0.55rem;
+    }
+    #move-legend{
+      position:absolute;
+      width:1px;
+      height:1px;
+      overflow:hidden;
+      clip:rect(0 0 0 0);
+      white-space:nowrap;
+    }
+    .move-grid{
+      grid-template-columns:repeat(3, 2.55rem);
+      grid-template-rows:repeat(3, 2.55rem);
+      gap:0.2rem;
+    }
+    .move-grid button{
+      font-size:1.05rem;
+    }
+    #game-screen > h2:nth-of-type(2){
+      order:6;
+      margin-top:0.15rem;
+    }
+    #log-region{
+      order:7;
+      padding:0.35rem 0.45rem;
+      margin-top:0.15rem;
+      min-height:2.2em;
+      font-size:0.85rem;
+    }
+    #log-line-1,
+    #log-line-2{
+      display:none;
+    }
+    #game-screen > h2:nth-of-type(4){ order:8; }
+    #game-screen > p.small-note{ order:9; }
+    #inventory-list{ order:10; }
+    #footer-actions{ order:11; }
+    #inventory-list li{
+      padding:0.35rem;
+      font-size:0.9rem;
+    }
+    #footer-actions{
+      gap:0.4rem;
+      margin-top:0.6rem;
+    }
+  }
+
+  @media (max-width: 700px) and (max-height: 620px){
+    h1{ font-size:0.92rem; margin-bottom:0.12rem; }
+    #game-screen > h2{ font-size:0.8rem; margin:0.12rem 0 0.08rem 0; }
+    #map-grid{
+      width:min(96vw, 30dvh, 280px);
+      max-width:min(96vw, 30dvh, 280px);
+    }
+    #status-line{ font-size:0.72rem; margin-top:0.15rem; }
+    .action-btns button{ font-size:0.82rem; padding:0.28rem 0.45rem; }
+    .move-grid{
+      grid-template-columns:repeat(3, 2.25rem);
+      grid-template-rows:repeat(3, 2.25rem);
+      gap:0.16rem;
+    }
+    .move-grid button{ font-size:0.95rem; }
+    #log-region{ font-size:0.78rem; min-height:1.8em; padding:0.25rem 0.35rem; }
+  }
+
 </style>
 </head>
 <body>
@@ -318,6 +450,113 @@
 <script>
 (function(){
 "use strict";
+
+
+/* =========================================================
+   ÄÄNITEHOSTEET
+   ========================================================= */
+const SFX = (function(){
+  let ctx = null;
+
+  function audioCtx(){
+    if(!ctx){
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+
+  function gainNode(volume, start, duration, attack){
+    const c = audioCtx();
+    const g = c.createGain();
+    const a = attack || 0.005;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), start + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    g.connect(c.destination);
+    return g;
+  }
+
+  function tone(freq, duration, type, volume, delay, endFreq){
+    const c = audioCtx();
+    const start = c.currentTime + (delay || 0);
+    const osc = c.createOscillator();
+    const g = gainNode(volume || 0.08, start, duration, 0.004);
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, start);
+    if(endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), start + duration);
+    osc.connect(g);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+
+  function noise(duration, volume, delay, filterType, filterFreq, q){
+    const c = audioCtx();
+    const start = c.currentTime + (delay || 0);
+    const bufferSize = Math.max(1, Math.floor(c.sampleRate * duration));
+    const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++){
+      data[i] = Math.random() * 2 - 1;
+    }
+    const src = c.createBufferSource();
+    src.buffer = buffer;
+
+    const filter = c.createBiquadFilter();
+    filter.type = filterType || "lowpass";
+    filter.frequency.setValueAtTime(filterFreq || 500, start);
+    filter.Q.setValueAtTime(q || 0.7, start);
+
+    const g = gainNode(volume || 0.08, start, duration, 0.002);
+    src.connect(filter);
+    filter.connect(g);
+    src.start(start);
+    src.stop(start + duration + 0.02);
+  }
+
+  function stepSoft(){
+    noise(0.055, 0.055, 0, "lowpass", 320);
+    tone(85, 0.045, "triangle", 0.025, 0.004, 55);
+  }
+
+  function stepDry(){
+    noise(0.035, 0.045, 0, "bandpass", 650);
+    tone(120, 0.025, "square", 0.018, 0.004, 70);
+  }
+
+  function stepPair(){
+    stepSoft();
+    setTimeout(stepDry, 135);
+  }
+
+  function warningLow(){
+    tone(130, 0.22, "sawtooth", 0.05, 0, 95);
+  }
+
+  function heal(){
+    tone(420, 0.08, "sine", 0.035, 0);
+    tone(560, 0.08, "sine", 0.035, 0.08);
+    tone(740, 0.12, "sine", 0.03, 0.16);
+  }
+
+  function pickup(){
+    tone(520, 0.055, "triangle", 0.035, 0);
+    tone(780, 0.08, "triangle", 0.03, 0.065);
+  }
+
+  function hitWhooshLong(){
+    noise(0.22, 0.10, 0, "bandpass", 760, 0.55);
+    tone(220, 0.18, "sine", 0.04, 0, 130);
+  }
+
+  return {
+    stepPair,
+    warningLow,
+    heal,
+    pickup,
+    hitWhooshLong
+  };
+})();
 
 /* =========================================================
    ASETUKSET JA TIETOVARASTOT
@@ -437,97 +676,6 @@ function rollDamage(weapon){
   }
   return total;
 }
-
-
-/* =========================================================
-   ÄÄNITEHOSTEET
-   ========================================================= */
-const SFX = (function(){
-  let ctx = null;
-
-  function audioCtx(){
-    if(!ctx){
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if(ctx.state === "suspended") ctx.resume();
-    return ctx;
-  }
-
-  function gainNode(volume, start, duration, attack){
-    const c = audioCtx();
-    const g = c.createGain();
-    const a = attack || 0.005;
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), start + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    g.connect(c.destination);
-    return g;
-  }
-
-  function tone(freq, duration, type, volume, delay, endFreq){
-    const c = audioCtx();
-    const start = c.currentTime + (delay || 0);
-    const osc = c.createOscillator();
-    const g = gainNode(volume || 0.08, start, duration, 0.004);
-    osc.type = type || "sine";
-    osc.frequency.setValueAtTime(freq, start);
-    if(endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), start + duration);
-    osc.connect(g);
-    osc.start(start);
-    osc.stop(start + duration + 0.02);
-  }
-
-  function noise(duration, volume, delay, filterType, filterFreq, q){
-    const c = audioCtx();
-    const start = c.currentTime + (delay || 0);
-    const bufferSize = Math.max(1, Math.floor(c.sampleRate * duration));
-    const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
-    const data = buffer.getChannelData(0);
-    for(let i=0;i<bufferSize;i++) data[i] = Math.random() * 2 - 1;
-    const src = c.createBufferSource();
-    src.buffer = buffer;
-    const filter = c.createBiquadFilter();
-    filter.type = filterType || "lowpass";
-    filter.frequency.setValueAtTime(filterFreq || 500, start);
-    filter.Q.setValueAtTime(q || 0.7, start);
-    const g = gainNode(volume || 0.08, start, duration, 0.002);
-    src.connect(filter);
-    filter.connect(g);
-    src.start(start);
-    src.stop(start + duration + 0.02);
-  }
-
-  function stepPair(){
-    noise(0.055, 0.055, 0, "lowpass", 320);
-    tone(85, 0.045, "triangle", 0.025, 0.004, 55);
-    setTimeout(()=>{
-      noise(0.035, 0.045, 0, "bandpass", 650);
-      tone(120, 0.025, "square", 0.018, 0.004, 70);
-    }, 135);
-  }
-
-  function warningLow(){
-    tone(130, 0.22, "sawtooth", 0.05, 0, 95);
-  }
-
-  function heal(){
-    tone(420, 0.08, "sine", 0.035, 0);
-    tone(560, 0.08, "sine", 0.035, 0.08);
-    tone(740, 0.12, "sine", 0.03, 0.16);
-  }
-
-  function pickup(){
-    tone(520, 0.055, "triangle", 0.035, 0);
-    tone(780, 0.08, "triangle", 0.03, 0.065);
-  }
-
-  function hitWhooshLong(){
-    noise(0.22, 0.10, 0, "bandpass", 760, 0.55);
-    tone(220, 0.18, "sine", 0.04, 0, 130);
-  }
-
-  return { stepPair, warningLow, heal, pickup, hitWhooshLong };
-})();
 
 function damageText(item){
   const count = item.diceCount || 1;
@@ -1199,14 +1347,13 @@ function tryMove(dx,dy){
   const items = itemsAt(p.x,p.y);
   if(items.length>0){
     refreshAll();
-    if(healingMessage){ SFX.heal(); addLog(healingMessage); state.latestLogIsAction = false; }
-    SFX.pickup();
+    if(healingMessage){ addLog(healingMessage); state.latestLogIsAction = false; }
     offerItemPickup(items[0]);
     return; // refresh tapahtuu modaalin sulkeuduttua
   }
 
   refreshAll();
-  if(healingMessage){ SFX.heal(); addLog(healingMessage); state.latestLogIsAction = false; }
+  if(healingMessage){ addLog(healingMessage); state.latestLogIsAction = false; }
   if(state.inCombat) maybeAutoEndTurn();
 }
 
@@ -1214,6 +1361,7 @@ function tryMove(dx,dy){
    ESINEEN POIMINTA
    ========================================================= */
 function offerItemPickup(item){
+  SFX.pickup();
   let desc = "Löysit esineen: " + item.name + ".";
   if(item.type==="weapon-melee" || item.type==="weapon-ranged"){
     desc += " Vahinko " + damageText(item) + ", osumatarkkuus " + Math.round(item.hitChance*100) + "%.";
@@ -1352,9 +1500,9 @@ function resolveAttack(enemy, weapon, mode){
   if(!hit){
     addLog(verb + " kohti " + enemy.name + " mutta et osu.");
   } else {
-    SFX.hitWhooshLong();
     const dmg = rollDamage(weapon);
     enemy.hp -= dmg;
+    SFX.hitWhooshLong();
     addLog(verb + " " + enemy.name + " ja osut: " + dmg + " vahinkoa.");
     if(enemy.hp <= 0){
       enemy.alive = false;
@@ -1475,10 +1623,10 @@ function enemyAttackPlayer(enemy, weapon, mode){
   if(!hit){
     return enemy.name + " " + verb + " kohti sinua, mutta ei osu.";
   } else {
-    SFX.hitWhooshLong();
     const dmg = rollDamage(weapon);
     state.player.hp -= dmg;
     state.nonCombatStepsSinceHeal = 0;
+    SFX.hitWhooshLong();
     return enemy.name + " " + verb + " sinua ja osuu: " + dmg + " vahinkoa. Terveytesi on " + Math.max(0,state.player.hp) + "/" + state.player.maxHp + ".";
   }
 }
