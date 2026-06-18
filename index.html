@@ -561,9 +561,11 @@ const SFX = (function(){
 /* =========================================================
    ASETUKSET JA TIETOVARASTOT
    ========================================================= */
-const MAP_SIZE = 100;
+const MAP_HEIGHT = 300;
+let currentMapWidth = 12;
 const VIEW_RADIUS = 3; // 7x7 -> keskeltä 3 ruutua kaikkiin suuntiin
-const ENEMY_COUNT = 10;
+const ENEMY_COUNT = 15;
+const ITEM_COUNT = 15;
 const INVENTORY_MAX = 6;
 const SAVE_KEY = "barbaari_save_v1";
 
@@ -612,21 +614,21 @@ const ENEMY_CLASSES = [
     name: "Sotilas",
     weight: 0.5,
     hp: 8,
-    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 4, hitChance: 0.7 },
-    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 2, hitChance: 0.5 }
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 3, hitChance: 0.6 },
+    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 2, hitChance: 0.4 }
   },
   {
     name: "Örkki",
     weight: 0.4,
     hp: 7,
-    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 3, hitChance: 0.8 },
-    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 3, hitChance: 0.6 }
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 1, dice: 3, hitChance: 0.7 },
+    rangedWeapon: { type: "ranged", name: "kaukohyökkäys", diceCount: 1, dice: 2, hitChance: 0.5 }
   },
   {
     name: "Peikko",
     weight: 0.1,
     hp: 15,
-    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 2, dice: 3, hitChance: 0.6 },
+    meleeWeapon: { type: "melee", name: "lähihyökkäys", diceCount: 2, dice: 3, hitChance: 0.5 },
     rangedWeapon: null
   }
 ];
@@ -640,6 +642,11 @@ function newGameState(playerName){
   return {
     playerName: playerName,
     player: { x: lastPlayerStart.x, y: lastPlayerStart.y, hp: 10, maxHp: 10, ap: 4 },
+    mapWidth: currentMapWidth,
+    mapHeight: MAP_HEIGHT,
+    treasure: { x: lastTreasure.x, y: lastTreasure.y, found: false },
+    enemiesKilled: 0,
+    accuracyBonus: 0,
     map: generateMap(),
     enemies: generateEnemies(),
     inventory: [
@@ -686,56 +693,58 @@ function damageText(item){
    KARTAN GENEROINTI
    ========================================================= */
 function generateMap(){
-  // Käytävämäinen kartta: ensin kaikki seinäksi, sitten mutkitteleva käytävä tyhjäksi.
+  currentMapWidth = 10 + Math.floor(Math.random() * 6);
   const map = [];
-  for(let y=0; y<MAP_SIZE; y++){
+  for(let y=0; y<MAP_HEIGHT; y++){
     const row = [];
-    for(let x=0; x<MAP_SIZE; x++){
-      row.push(TILE.WALL);
+    for(let x=0; x<currentMapWidth; x++){
+      row.push(TILE.EMPTY);
     }
     map.push(row);
   }
 
-  let centerY = 7 + Math.floor(Math.random() * (MAP_SIZE - 14));
-  const centers = [];
+  // Puita ja seinia satunnaisesti kapealle pystykartalle.
+  const startX = Math.floor(currentMapWidth / 2);
+  const startY = MAP_HEIGHT - 4;
+  const treasureX = Math.floor(currentMapWidth / 2);
+  const treasureY = 3;
+  lastPlayerStart = { x: startX, y: startY };
+  lastTreasure = { x: treasureX, y: treasureY };
 
-  for(let x=0; x<MAP_SIZE; x++){
-    if(x > 0 && Math.random() < 0.45){
-      centerY += Math.floor(Math.random()*3)-1;
-      centerY = Math.max(7, Math.min(MAP_SIZE - 8, centerY));
-    }
-    centers[x] = centerY;
-    const width = 12 + Math.floor(Math.random()*5); // keskimäärin noin 14 ruutua
-    const halfLow = Math.floor(width / 2);
-    const halfHigh = width - halfLow - 1;
-    for(let y=centerY-halfLow; y<=centerY+halfHigh; y++){
-      if(inBounds(x,y)) map[y][x] = TILE.EMPTY;
-    }
-  }
-
-  lastPlayerStart = { x: 2, y: centers[2] };
-
-  // Puita käytävään.
-  const treeCount = Math.floor(MAP_SIZE*MAP_SIZE*0.012);
+  const treeCount = Math.floor(currentMapWidth * MAP_HEIGHT * 0.025);
   for(let i=0;i<treeCount;i++){
-    const x = Math.floor(Math.random()*MAP_SIZE);
-    const y = Math.floor(Math.random()*MAP_SIZE);
-    if(map[y][x] !== TILE.EMPTY) continue;
-    if(chebyshevDist(x,y,lastPlayerStart.x,lastPlayerStart.y) < 4) continue;
+    const x = Math.floor(Math.random()*currentMapWidth);
+    const y = Math.floor(Math.random()*MAP_HEIGHT);
+    if(chebyshevDist(x,y,startX,startY) < 4) continue;
+    if(chebyshevDist(x,y,treasureX,treasureY) < 3) continue;
     map[y][x] = TILE.TREE;
   }
 
-  // Satunnaisia seinäesteitä käytävään.
-  const wallCount = Math.floor(MAP_SIZE*MAP_SIZE*0.006);
+  const wallCount = Math.floor(currentMapWidth * MAP_HEIGHT * 0.015);
   for(let i=0;i<wallCount;i++){
-    const x = Math.floor(Math.random()*MAP_SIZE);
-    const y = Math.floor(Math.random()*MAP_SIZE);
+    const x = Math.floor(Math.random()*currentMapWidth);
+    const y = Math.floor(Math.random()*MAP_HEIGHT);
     if(map[y][x] !== TILE.EMPTY) continue;
-    if(chebyshevDist(x,y,lastPlayerStart.x,lastPlayerStart.y) < 4) continue;
+    if(chebyshevDist(x,y,startX,startY) < 4) continue;
+    if(chebyshevDist(x,y,treasureX,treasureY) < 3) continue;
     map[y][x] = TILE.WALL;
   }
 
-  map[lastPlayerStart.y][lastPlayerStart.x] = TILE.EMPTY;
+  // Varmistetaan pystysuuntainen kulkureitti alhaalta aarteelle.
+  let pathX = startX;
+  for(let y=startY; y>=treasureY; y--){
+    if(Math.random() < 0.35){
+      pathX += Math.floor(Math.random()*3)-1;
+      pathX = Math.max(1, Math.min(currentMapWidth - 2, pathX));
+    }
+    for(let dx=-1; dx<=1; dx++){
+      const x = pathX + dx;
+      if(x>=0 && x<currentMapWidth) map[y][x] = TILE.EMPTY;
+    }
+  }
+  lastTreasure = { x: pathX, y: treasureY };
+  map[startY][startX] = TILE.EMPTY;
+  map[lastTreasure.y][lastTreasure.x] = TILE.EMPTY;
   return map;
 }
 
@@ -744,12 +753,13 @@ function generateEnemies(){
   let attempts = 0;
   while(enemies.length < ENEMY_COUNT && attempts < 2000){
     attempts++;
-    const x = Math.floor(Math.random()*MAP_SIZE);
-    const y = Math.floor(Math.random()*MAP_SIZE);
+    const x = Math.floor(Math.random()*currentMapWidth);
+    const y = Math.floor(Math.random()*MAP_HEIGHT);
     // ei liian lähellä pelaajan aloitusta, ei seinän/puun päällä
     const start = lastPlayerStart || { x: 50, y: 50 };
     const dist = Math.max(Math.abs(x-start.x), Math.abs(y-start.y));
     if(dist < 6) continue;
+    if(lastTreasure && x===lastTreasure.x && y===lastTreasure.y) continue;
     if(state_map_tile_temp && state_map_tile_temp[y] && state_map_tile_temp[y][x] !== TILE.EMPTY) continue;
     enemies.push(makeEnemy(x,y));
   }
@@ -760,6 +770,7 @@ function generateEnemies(){
 // korjataan järjestystä newGameState:ssa. Käytetään apumuuttujaa tilapäisesti.
 let state_map_tile_temp = null;
 let lastPlayerStart = { x: 50, y: 50 };
+let lastTreasure = { x: 50, y: 3 };
 
 function weightedChoice(items){
   const total = items.reduce((sum, item)=>sum + (item.weight || 1), 0);
@@ -813,7 +824,9 @@ function finalizeEnemy(e){ e.maxHp = e.maxHp || e.hp; return e; }
    APUFUNKTIOT: KARTTA / NÄKYMÄ
    ========================================================= */
 function inBounds(x,y){
-  return x>=0 && x<MAP_SIZE && y>=0 && y<MAP_SIZE;
+  const width = state && state.mapWidth ? state.mapWidth : currentMapWidth;
+  const height = state && state.mapHeight ? state.mapHeight : MAP_HEIGHT;
+  return x>=0 && x<width && y>=0 && y<height;
 }
 
 function tileAt(x,y){
@@ -882,16 +895,17 @@ function renderLog(){
    ESINEIDEN GENEROINTI MAAILMAAN (ALUSSA)
    ========================================================= */
 function scatterItems(){
-  const itemCount = 14;
+  const itemCount = ITEM_COUNT;
   let placed = 0;
   let attempts = 0;
   while(placed < itemCount && attempts < 3000){
     attempts++;
-    const x = Math.floor(Math.random()*MAP_SIZE);
-    const y = Math.floor(Math.random()*MAP_SIZE);
+    const x = Math.floor(Math.random()*currentMapWidth);
+    const y = Math.floor(Math.random()*MAP_HEIGHT);
     if(!isWalkable(x,y)) continue;
     const start = lastPlayerStart || { x: 50, y: 50 };
     if(chebyshevDist(x,y,start.x,start.y) < 3) continue;
+    if(lastTreasure && x===lastTreasure.x && y===lastTreasure.y) continue;
     if(enemyAt(x,y)) continue;
     const item = randomWorldItem();
     const existing = itemsAt(x,y);
@@ -926,11 +940,12 @@ function startNewGame(playerName){
   let attempts = 0;
   while(enemiesRaw.length < ENEMY_COUNT && attempts < 5000){
     attempts++;
-    const x = Math.floor(Math.random()*MAP_SIZE);
-    const y = Math.floor(Math.random()*MAP_SIZE);
+    const x = Math.floor(Math.random()*currentMapWidth);
+    const y = Math.floor(Math.random()*MAP_HEIGHT);
     const start = lastPlayerStart || { x: 50, y: 50 };
     const dist = Math.max(Math.abs(x-start.x), Math.abs(y-start.y));
     if(dist < 6) continue;
+    if(lastTreasure && x===lastTreasure.x && y===lastTreasure.y) continue;
     if(map[y][x] !== TILE.EMPTY) continue;
     if(enemiesRaw.some(e=>e.x===x && e.y===y)) continue;
     enemiesRaw.push(finalizeEnemy(makeEnemy(x,y)));
@@ -939,6 +954,11 @@ function startNewGame(playerName){
   state = {
     playerName: playerName,
     player: { x: lastPlayerStart.x, y: lastPlayerStart.y, hp: 10, maxHp: 10, ap: 4 },
+    mapWidth: currentMapWidth,
+    mapHeight: MAP_HEIGHT,
+    treasure: { x: lastTreasure.x, y: lastTreasure.y, found: false },
+    enemiesKilled: 0,
+    accuracyBonus: 0,
     map: map,
     enemies: enemiesRaw,
     inventory: [
@@ -959,7 +979,7 @@ function startNewGame(playerName){
 
   scatterItems();
 
-  addLog("Seikkailu alkaa, " + playerName + "! Tutki ympäristöäsi ja löydä kaikki kymmenen vihollista.");
+  addLog("Seikkailu alkaa, " + playerName + "! Kulje kartan läpi ja löydä aarre.");
   showGameScreen();
   refreshAll();
 }
@@ -994,12 +1014,16 @@ function renderMap(){
         const enemy = enemyAt(x,y);
         const items = itemsAt(x,y);
         const corpse = corpseAt(x,y);
+        const treasure = state.treasure && !state.treasure.found && state.treasure.x===x && state.treasure.y===y;
         if(enemy){
           visual = "👹";
           srText = enemy.name;
         } else if(corpse){
           visual = "☠";
           srText = "Ruumis: " + corpse.name;
+        } else if(treasure){
+          visual = "💰";
+          srText = "Aarre";
         } else if(tile === TILE.TREE){
           visual = "🌲";
           srText = "Puu";
@@ -1049,6 +1073,10 @@ function describeSurroundings(){
       const corpse = corpseAt(x,y);
       if(corpse){
         descriptions.push("Ruumis " + dir.name + ", " + dist);
+        break;
+      }
+      if(state.treasure && !state.treasure.found && state.treasure.x===x && state.treasure.y===y){
+        descriptions.push("Aarre " + dir.name + ", " + dist);
         break;
       }
       const tile = tileAt(x,y);
@@ -1338,6 +1366,18 @@ function tryMove(dx,dy){
   p.y = targetY;
   SFX.stepPair();
 
+  if(state.treasure && !state.treasure.found && p.x === state.treasure.x && p.y === state.treasure.y){
+    state.treasure.found = true;
+    state.gameOver = true;
+    state.won = true;
+    addLog("Löysit aarteen! Voitit pelin.");
+    refreshAll();
+    showModal("Voitto!", "Löysit aarteen ja selvisit kartan läpi. Seikkailu on ohi - hyvin tehty, " + state.playerName + "!", [
+      { label: "Aloita uusi peli", action: ()=>{ goToStartScreen(); } }
+    ]);
+    return;
+  }
+
   let healingMessage = "";
   if(!wasInCombatAtMoveStart){
     healingMessage = handleNonCombatStepHealing();
@@ -1494,7 +1534,8 @@ function showTargetSelection(targets, onChosen){
 
 function resolveAttack(enemy, weapon, mode){
   state.player.ap -= 2;
-  const hit = Math.random() < weapon.hitChance;
+  const hitChance = Math.min(0.95, weapon.hitChance + (state.accuracyBonus || 0));
+  const hit = Math.random() < hitChance;
   const verb = mode==="melee" ? "Lyöt" : "Ammut";
 
   if(!hit){
@@ -1508,8 +1549,7 @@ function resolveAttack(enemy, weapon, mode){
       enemy.alive = false;
       if(!state.corpses) state.corpses = [];
       state.corpses.push({ x: enemy.x, y: enemy.y, name: enemy.name });
-      addLog(enemy.name + " kuolee.");
-      checkVictory();
+      addLog(enemy.name + " kuolee." + gainExperienceFromKill());
     }
   }
 
@@ -1520,16 +1560,21 @@ function resolveAttack(enemy, weapon, mode){
 /* =========================================================
    VOITTO / TAPPIO
    ========================================================= */
+function gainExperienceFromKill(){
+  if(typeof state.enemiesKilled !== "number") state.enemiesKilled = 0;
+  if(typeof state.accuracyBonus !== "number") state.accuracyBonus = 0;
+  state.enemiesKilled += 1;
+  if(state.enemiesKilled % 3 === 0){
+    state.accuracyBonus += 0.05;
+    return " Sait kokemusta. 5 % lisä osumistodennäköisyyteen";
+  }
+  return "";
+}
+
 function checkVictory(){
-  const allDead = state.enemies.every(e=>!e.alive);
-  if(allDead){
+  if(state.treasure && state.treasure.found){
     state.gameOver = true;
     state.won = true;
-    addLog("Kaikki viholliset on kukistettu! Voitit pelin.");
-    refreshAll();
-    showModal("Voitto!", "Olet kukistanut kaikki kymmenen vihollista. Seikkailu on ohi - hyvin tehty, " + state.playerName + "!", [
-      { label: "Aloita uusi peli", action: ()=>{ goToStartScreen(); } }
-    ]);
   }
 }
 
@@ -1734,6 +1779,12 @@ function loadGame(){
     if(!state.corpses) state.corpses = [];
     if(typeof state.nonCombatStepsSinceHeal !== "number") state.nonCombatStepsSinceHeal = 0;
     if(typeof state.latestLogIsAction !== "boolean") state.latestLogIsAction = false;
+    if(!state.mapHeight) state.mapHeight = state.map ? state.map.length : MAP_HEIGHT;
+    if(!state.mapWidth) state.mapWidth = state.map && state.map[0] ? state.map[0].length : currentMapWidth;
+    currentMapWidth = state.mapWidth;
+    if(!state.treasure) state.treasure = { x: Math.floor(state.mapWidth/2), y: 3, found: false };
+    if(typeof state.enemiesKilled !== "number") state.enemiesKilled = 0;
+    if(typeof state.accuracyBonus !== "number") state.accuracyBonus = 0;
     state.inventory.forEach(item=>{ if((item.type==="weapon-melee" || item.type==="weapon-ranged") && !item.diceCount) item.diceCount = 1; });
     state.enemies.forEach(enemy=>{
       if(enemy.alive && !enemy.meleeWeapon && enemy.weapon){
